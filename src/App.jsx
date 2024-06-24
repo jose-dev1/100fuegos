@@ -8,6 +8,23 @@ import AddShoppingCartIcon from '@mui/icons-material/AddShoppingCart';
 import { ToastContainer, toast } from 'react-toastify';
 import HistorialCompras from './components/historial_component';
 import 'react-toastify/dist/ReactToastify.css';
+import productosData from './api/datos_model';
+import { initializeApp } from "firebase/app";
+import { getFirestore, collection, addDoc, getDocs, } from 'firebase/firestore';
+
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAh59eJqJ_hazs_7hiTRSE9jHbXjO-sYPI",
+  authDomain: "fuegos-app.firebaseapp.com",
+  projectId: "fuegos-app",
+  storageBucket: "fuegos-app.appspot.com",
+  messagingSenderId: "613725237362",
+  appId: "1:613725237362:web:d11e7ff1fb7643a19412eb"
+};
+
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
 function App() {
   const [numProductos, setNumProductos] = useState("");
@@ -47,6 +64,36 @@ function App() {
     setProductos(newProductos);
   };
 
+  const guardarPedidoEnFirebase = () => {
+    const pedido = {
+      nombre: nombre,
+      documento: documento,
+      telefono: telefono,
+      direccion: direccion,
+      tipoHogar: tipoHogar,
+      referencia: referencia,
+      productos: productos,
+      precioTotal: calcularPrecioTotal()
+    };
+
+    addDoc(collection(db, "pedidos"), pedido)
+      .then(() => {
+        toast.success("Pedido agendado", { position: "bottom-center" });
+        setNombre("");
+        setDocumento("");
+        setTelefono("");
+        setDireccion("");
+        setTipoHogar("");
+        setReferencia("");
+        setNumProductos("");
+        setProductos([]);
+      })
+      .catch((error) => {
+        toast.error("Error al agendar el pedido", { position: "bottom-center" });
+        console.error("Error al guardar el pedido: ", error);
+      });
+  };
+
   const handleCantidadChange = (index, operacion) => {
     const newProductos = [...productos];
     if (operacion === 'incrementar') {
@@ -57,20 +104,16 @@ function App() {
     setProductos(newProductos);
   };
 
-  // Calcular el precio total
   const calcularPrecioTotal = () => {
-    // Precio base de los productos
     let precioTotal = productos.reduce((total, producto) => {
-      return total + producto.cantidad * 10; // Supongamos que el precio unitario es $10
+      const productoInfo = productosData.find(p => p.producto === producto.tipo);
+      const precioUnitario = productoInfo ? productoInfo.precio : 0;
+      return total + producto.cantidad * precioUnitario;
     }, 0);
 
-    // Agregar IVA
-    precioTotal *= 1.1; // IVA del 10%
+    precioTotal += 5000;
 
-    // Agregar costo de domicilio
-    precioTotal += 5; // Supongamos que el costo de domicilio es fijo en $5
-
-    return precioTotal.toFixed(2); // Redondear a 2 decimales
+    return precioTotal.toFixed(2);
   };
 
   return (
@@ -164,38 +207,55 @@ function App() {
             </h1>
           </div>
           <div className='overflow-x-scroll max-h-[200px]'>
-            {productos.map((producto, index) => (
-              <Card key={index} sx={{ mb: 4, boxShadow: '0 1px 8px 0 rgba(0, 0, 0, 0.2)', borderRadius: 4 }}>
-                <CardContent>
-                  <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-                    <TextField
-                      label="Tipo de producto"
-                      variant="outlined"
-                      select
-                      value={producto.tipo}
-                      onChange={(e) => handleTipoProductoChange(index, e)}
-                      sx={{ borderRadius: 1, width: '40%' }}
-                    >
-                      <MenuItem value="producto1">Producto 1</MenuItem>
-                      <MenuItem value="producto2">Producto 2</MenuItem>
-                      <MenuItem value="producto3">Producto 3</MenuItem>
-                    </TextField>
-                  </Stack>
-                  <div className='flex mt-2 mb-4 flex-col md:flex-row items-start'>
-                    <h1 className='text-gray-500 font-inter font-semibold'>
-                      Unidades
-                    </h1>
-                  </div>
-                  <Fab size="medium" color="error" aria-label="quitar" onClick={() => handleQuitarProducto(index)}>
-                    <RemoveIcon />
-                  </Fab>
-                  <span style={{ fontSize: '1.2rem', fontWeight: 'bold', borderRadius: '5px', marginLeft: '20px', marginRight: '20px' }}>{producto.cantidad}</span>
-                  <Fab size="medium" color="success" aria-label="agregar" onClick={() => handleCantidadChange(index, 'incrementar')}>
-                    <AddIcon />
-                  </Fab>
-                </CardContent>
-              </Card>
-            ))}
+            {productos.map((producto, index) => {
+              const productoInfo = productosData.find(p => p.producto === producto.tipo);
+              return (
+                <Card key={index} sx={{ mb: 4, boxShadow: '0 1px 8px 0 rgba(0, 0, 0, 0.2)', borderRadius: 4 }}>
+                  <CardContent>
+                    <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+                      <TextField
+                        label="Tipo de producto"
+                        variant="outlined"
+                        select
+                        value={producto.tipo}
+                        onChange={(e) => handleTipoProductoChange(index, e)}
+                        sx={{ borderRadius: 1, width: '40%' }}
+                      >
+                        {productosData.map((productoData, i) => (
+                          <MenuItem key={i} value={productoData.producto}>
+                            {productoData.producto}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                      {productoInfo && (
+                        <div style={{ marginLeft: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                          <h2 className='text-orange-500 font-inter font-semibold' style={{ textAlign: 'center' }}>{productoInfo.producto}</h2>
+                          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center' }}>
+                            <img className='w-20 h-20 ml-4' src={productoInfo.img_link} alt={productoInfo.producto} />
+                            <div style={{ marginLeft: '20px' }}>
+                              <p className='text-gray-500'>{productoInfo.descripcion}</p>
+                            </div>
+                          </div>
+                          <p className=' ml-80 text-orange-500 font-semibold'>Precio: ${productoInfo.precio.toLocaleString()} COP</p>
+                        </div>
+                      )}
+                    </Stack>
+                    <div className='flex mt-2 mb-4 flex-col md:flex-row items-start'>
+                      <h1 className='text-gray-500 font-inter font-semibold'>
+                        Unidades
+                      </h1>
+                    </div>
+                    <Fab size="medium" color="error" aria-label="quitar" onClick={() => handleQuitarProducto(index)}>
+                      <RemoveIcon />
+                    </Fab>
+                    <span style={{ fontSize: '1.2rem', fontWeight: 'bold', borderRadius: '5px', marginLeft: '20px', marginRight: '20px' }}>{producto.cantidad}</span>
+                    <Fab size="medium" color="success" aria-label="agregar" onClick={() => handleCantidadChange(index, 'incrementar')}>
+                      <AddIcon />
+                    </Fab>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
           {productos.length > 0 && (
             <>
@@ -206,7 +266,7 @@ function App() {
               <div className="flex justify-end items-center pr-4">
                 <p className=" text-lg text-gray-500 font-inter font-semibold">Precio total incluyendo IVA + domicilio</p>
               </div>
-              <button className='flex items-center justify-center w-full h-full mt-4 px-4 py-4 bg-orange-500 text-white rounded-xl shadow-xl hover:bg-orange-600 transition duration-300 font-bold'>
+              <button className='flex items-center justify-center w-full h-full mt-4 px-4 py-4 bg-orange-500 text-white rounded-xl shadow-xl hover:bg-orange-600 transition duration-300 font-bold' onClick={guardarPedidoEnFirebase}>
                 REALIZAR PEDIDO  <AddShoppingCartIcon sx={{ marginRight: '0.5rem' }} />
               </button>
             </>
